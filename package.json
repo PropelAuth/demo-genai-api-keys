@@ -1,0 +1,15 @@
+{
+  "name": "demo-genai-api-keys",
+  "description": "A demo app for the GenAI API Keys tutorial",
+  "version": "1.0.0",
+  "main": "app.js",
+  "dependencies": {
+    "@propelauth/express": "^2.1.23",
+    "express": "^4.21.1"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
