@@ -1,89 +1,77 @@
-import express, { Request } from "express";
+import express, { Request, Response } from "express";
 import bodyParser from "body-parser";
-import { ApiKeyValidateException, initAuth } from '@propelauth/express';
-import dotenv from 'dotenv'
-dotenv.config()
+import { initAuth, UserMetadata } from "@propelauth/express";
+import dotenv from "dotenv";
+dotenv.config();
 
 const app = express();
-const port = 3000
-const jsonParser = bodyParser.json()
+const port = 3000;
+const jsonParser = bodyParser.json();
 
 const auth = initAuth({
   authUrl: process.env.PROPELAUTH_AUTH_URL!,
   apiKey: process.env.PROPELAUTH_API_KEY!,
-})
+});
 
-app.post('/api/user/signup', auth.requireUser, async (req: Request, res) => {
-  try {
-    // Set the trial expiration date to 7 days from now
-    const date = new Date();
-    date.setDate(date.getDate() + 7);
-    const userId = req.userClass!.userId;
-
-    const result = await auth.updateUserMetadata(userId, {
-      properties: {
-        "plan_name": 'Free',
-        // YYYY-MM-DD format is required
-        "trial_expires_on": date.toISOString().split('T')[0]
-      }
-    })
-    res.json(result);
+app.post("/webhook/stripe", async (req: Request, res) => {
+  const event = req.body;
+  const userId = event.data.object.metadata.userId;
+  switch (event.type) {
+    case "customer.subscription.created":
+      await updateUserPlan(userId, "Paid");
+      break;
+    case "customer.subscription.deleted":
+      await updateUserPlan(userId, "Free");
+      break;
   }
-  catch (error) {
-    res.status(500).json({ error: error });
-  }
-})
 
-app.post('/api/user/upgrade', auth.requireUser, async (req: Request, res) => {
+  // Return a response to acknowledge receipt of the event
+  res.json({ received: true });
+});
+
+const updateUserPlan = async (userId: string, planName: string) => {
+  await auth.updateUserMetadata(userId, {
+    properties: {
+      plan_name: planName,
+    },
+  });
+};
+
+app.post("/api/image/create", jsonParser, async (req: Request, res: Response) => {
+  const apiKey = req.body.apiKey;
+  const validatedUser = await validateApiKey(apiKey, res);
+  await validateGenAIRequest(validatedUser, res);
+
+  // User is permitted to create an image
+  // Image creation outside the scope of this example
+  // Instead, return a cute puppy picture
+  res.json({ imageCreated: "https://picsum.photos/id/237/200/300" });
+});
+
+/* Allow the GenAI request if:
+- The user is on Free plan and created date isn't past 7 days OR
+- The user is on Paid plan */
+const validateGenAIRequest = async (validatedUser: UserMetadata, res: Response) => {
+  const userCreatedDate = new Date(validatedUser.createdAt * 1000);
+  const trialExpirationDate = new Date();
+  trialExpirationDate.setDate(userCreatedDate.getDate() + 7);
+  const todaysDate = new Date();
+
+  const planName = validatedUser.properties?.planName ?? "Free";
+  if (planName === "Free" && todaysDate.getTime() > trialExpirationDate.getTime()) {
+    res.status(403).json({ error: "Trial expired. Please upgrade to Paid plan." });
+    return;
+  }
+};
+
+async function validateApiKey(apiKey: string, res: Response) {
   try {
-    const userId = req.userClass!.userId;
-    const result = await auth.updateUserMetadata(userId, {
-      properties: {
-        "plan_name": 'Paid'
-      }
-    })
-    res.json(result);
+    return (await auth.validatePersonalApiKey(apiKey)).user;
   } catch (error) {
-    res.status(500).json({ error: error });
+    res.status(401).json({ error: "Invalid API key" });
+    throw new Error("Invalid API key");
   }
-})
-
-app.post('/api/image/create', auth.requireUser, jsonParser, async (req: Request, res) => {
-  try {
-    const apiKey = req.body.apiKey;
-    const validate = await auth.validateApiKey(apiKey)
-    
-    // Allow the GenAI request if:
-    // - The user is on Free plan and trial hasn't expired OR
-    // - The user is on Paid plan
-    const userProps = validate.user?.properties;
-    const currentDate = new Date();
-    const trialExpiresOn = new Date(userProps?.trialExpiresOn as string);
-    if (userProps?.planName === 'Free' 
-      && currentDate.getTime() > trialExpiresOn.getTime()) {
-      throw new Error('Trial expired. Please upgrade to Paid plan.');
-    }
-    
-    // User is permitted to create an image
-    // Image creation outside the scope of this example
-    // Instead, return a cute puppy picture
-    res.json({ imageCreated : "https://picsum.photos/id/237/200/300"});
-  } catch (error) {
-    // TODO: Clean this up? ie better way to handle errors?
-    if (error instanceof ApiKeyValidateException) {
-      const errorMessage = JSON.parse(error.message);
-      res.status(401).json({ error: errorMessage.api_key_token });
-    } else if (error instanceof Error) {
-      if (error.message === 'Trial expired. Please upgrade to Paid plan.') {
-        res.status(403).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: error.message });
-      }
-    } else {
-      res.status(500).json({ error: 'An unknown error occurred.' });
-    }
-  } 
-})
+}
 
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
