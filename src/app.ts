@@ -13,7 +13,7 @@ const auth = initAuth({
   apiKey: process.env.PROPELAUTH_API_KEY!,
 });
 
-app.post("/webhook/stripe", async (req: Request, res) => {
+app.post("/webhook/stripe", jsonParser, async (req: Request, res) => {
   const event = req.body;
   const userId = event.data.object.metadata.userId;
   switch (event.type) {
