@@ -64,14 +64,14 @@ const validateGenAIRequest = async (validatedUser: UserMetadata, res: Response) 
   }
 };
 
-async function validateApiKey(apiKey: string, res: Response) {
+const validateApiKey = async (apiKey: string, res: Response) => {
   try {
     return (await auth.validatePersonalApiKey(apiKey)).user;
   } catch (error) {
     res.status(401).json({ error: "Invalid API key" });
     throw new Error("Invalid API key");
   }
-}
+};
 
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
