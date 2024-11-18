@@ -59,7 +59,7 @@ const validateUserIsPayingOrOnTrial = async (validatedUser: UserMetadata, res: R
   const planName = validatedUser.properties?.planName ?? "Free";
   if (planName === "Free" && todaysDate.getTime() > trialExpirationDate.getTime()) {
     res.status(403).json({ error: "Trial expired. Please upgrade to Paid plan." });
-    return;
+    throw new Error("Trial expired. Please upgrade to Paid plan.");
   }
 };
 
