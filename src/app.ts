@@ -40,7 +40,7 @@ const updateUserPlan = async (userId: string, planName: string) => {
 app.post("/api/image/create", jsonParser, async (req: Request, res: Response) => {
   const apiKey = req.body.apiKey;
   const validatedUser = await validateApiKey(apiKey, res);
-  await validateGenAIRequest(validatedUser, res);
+  await validateUserIsPayingOrOnTrial(validatedUser, res);
 
   // User is permitted to create an image
   // Image creation outside the scope of this example
@@ -51,10 +51,9 @@ app.post("/api/image/create", jsonParser, async (req: Request, res: Response) =>
 /* Allow the GenAI request if:
 - The user is on Free plan and created date isn't past 7 days OR
 - The user is on Paid plan */
-const validateGenAIRequest = async (validatedUser: UserMetadata, res: Response) => {
-  const userCreatedDate = new Date(validatedUser.createdAt * 1000);
-  const trialExpirationDate = new Date();
-  trialExpirationDate.setDate(userCreatedDate.getDate() + 7);
+const validateUserIsPayingOrOnTrial = async (validatedUser: UserMetadata, res: Response) => {
+  const trialExpirationDate = new Date(validatedUser.createdAt * 1000);
+  trialExpirationDate.setDate(trialExpirationDate.getDate() + 7);
   const todaysDate = new Date();
 
   const planName = validatedUser.properties?.planName ?? "Free";
